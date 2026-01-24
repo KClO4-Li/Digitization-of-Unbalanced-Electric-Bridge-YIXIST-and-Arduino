@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验室综合控制台</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 局部样式补充，确保表头紧凑 */
+        .th-container {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+        }
+
+        .btn-del-col {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            font-size: 10px;
+            padding: 0 4px;
+            border-radius: 50%;
+            z-index: 10;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid px-4">
+        <h3 class="mb-4 text-center fw-bold text-primary">物理创新实验室综合控制台</h3>
+
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <button id="btn-conn-arduino" class="btn btn-outline-primary w-100 py-2 fw-bold">1. 连接电阻箱
+                    (Arduino)</button>
+            </div>
+            <div class="col-md-6">
+                <button id="btn-conn-ble" class="btn btn-outline-success w-100 py-2 fw-bold">2. 连接电压表 (蓝牙)</button>
+            </div>
+        </div>
+
+        <div class="row align-items-stretch">
+            <div class="col-md-4 d-flex flex-column">
+                <div class="card h-100 w-100">
+                    <div class="card-header bg-primary text-white fw-bold">电阻箱控制</div>
+                    <div class="card-body">
+                        <div id="arduino-status" class="alert alert-secondary py-1 text-center small">等待连接...</div>
+
+                        <div class="display-box display-resistor" id="res-display">---- Ω</div>
+
+                        <div class="bg-light p-3 rounded border mb-3">
+                            <label class="form-label fw-bold small">设置目标阻值 (0~1550Ω)</label>
+                            <div class="input-group">
+                                <input type="number" id="res-input" class="form-control" placeholder="50的倍数" disabled>
+                                <button class="btn btn-primary" type="button" id="btn-set-res" disabled>设置</button>
+                            </div>
+                            <div id="res-error-msg" class="text-danger small mt-1 fw-bold" style="display:none;"></div>
+                        </div>
+
+                        <h6 class="text-muted border-bottom pb-2 small">引脚详情</h6>
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            {% set pin_map = [(2, 50), (3, 100), (4, 200), (5, 400), (6, 800)] %}
+                            {% for pin, ohm in pin_map %}
+                            <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                                <span class="fw-bold text-dark">Pin {{ pin }} <span class="badge bg-secondary ms-1">{{
+                                        ohm }}Ω</span></span>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input pin-toggle" type="checkbox" id="pin-{{ pin }}"
+                                        data-pin="{{ pin }}" disabled>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header bg-success text-white fw-bold">电压传感器</div>
+                    <div class="card-body">
+                        <div class="row g-2 mb-3">
+                            <div class="col-auto"><select id="ble-freq" class="form-select form-select-sm" disabled>
+                                    <option value="10">10Hz</option>
+                                    <option value="100">100Hz</option>
+                                </select></div>
+                            <div class="col-auto"><select id="ble-range" class="form-select form-select-sm" disabled>
+                                    <option value="±20V">±20V</option>
+                                    <option value="±5V">±5V</option>
+                                </select></div>
+                        </div>
+
+                        <div class="display-box display-voltage" id="voltage-display">0.0000 V</div>
+
+                        <div class="d-flex gap-2 justify-content-center">
+                            <button id="btn-start" class="btn btn-success px-4" disabled>▶ 开始测量</button>
+                            <button id="btn-stop" class="btn btn-danger px-4" disabled>⏹ 停止</button>
+                            <button id="btn-tare" class="btn btn-warning px-4" disabled>⚖ 归零</button>
+                        </div>
+                        <div class="status-bar text-center">状态: <span id="ble-status">未连接</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div
+                        class="card-header bg-light text-dark fw-bold d-flex justify-content-between align-items-center">
+                        <span>📊 实验数据记录</span>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary me-2" onclick="addColumn()">+ 添加列</button>
+                            <button class="btn btn-sm btn-outline-secondary me-2" onclick="clearTable()">清空</button>
+                            <button class="btn btn-sm btn-success" onclick="exportToCSV()">导出 CSV</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 mb-3 align-items-center bg-white p-2 border rounded">
+                            <div class="col-auto fw-bold text-primary">⚙️ 设置:</div>
+                            <div class="col-auto">
+                                <div class="input-group input-group-sm" title="用于ΔR计算的电源电压">
+                                    <span class="input-group-text">Us(V)</span>
+                                    <input type="number" id="us-input" class="form-control" value="2.0" step="0.1"
+                                        style="width: 60px;">
+                                </div>
+                            </div>
+                            <div class="col-auto border-start ps-2">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text">间隔(s)</span>
+                                    <input type="number" id="auto-rec-interval" class="form-control" value="1.0"
+                                        min="0.1" step="0.1" style="width: 60px;">
+                                </div>
+                            </div>
+                            <div class="col-auto">
+                                <button id="btn-auto-rec-start" class="btn btn-sm btn-outline-success"
+                                    onclick="startAutoRecord()">▶ 启动自动</button>
+                                <button id="btn-auto-rec-stop" class="btn btn-sm btn-outline-danger"
+                                    onclick="stopAutoRecord()" disabled>⏹ 停止自动</button>
+                            </div>
+                            <div class="col-auto border-start ps-3 ms-2">
+                                <button id="btn-record-point" class="btn btn-sm btn-danger fw-bold"
+                                    onclick="recordManualPoint()">🔴 手动记录一次</button>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive border rounded" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-bordered table-hover text-center table-sm align-middle mb-0"
+                                id="data-table">
+                                <thead>
+                                    <tr id="table-header-row">
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                        <button class="btn btn-sm btn-link text-decoration-none mt-1" onclick="addEmptyRow()">+
+                            添加空行</button>
+
+                        <hr>
+                        <div class="row g-2 align-items-center">
+                            <div class="col-auto fw-bold">📈 绘图:</div>
+                            <div class="col-auto">X轴: <select id="chart-x-col" class="form-select form-select-sm"
+                                    style="width:100px"></select></div>
+                            <div class="col-auto">Y轴: <select id="chart-y-col" class="form-select form-select-sm"
+                                    style="width:100px"></select></div>
+                            <div class="col-auto"><button class="btn btn-sm btn-primary"
+                                    onclick="drawChart()">生成散点图</button></div>
+                        </div>
+                        <div id="chart-container">
+                            <canvas id="experimentChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/script.js"></script>
+</body>
+
+</html>
