@@ -4,6 +4,7 @@ let currentResistance = 0;
 let startTime = Date.now();
 let chartInstance = null;
 let autoRecordTimer = null;
+let resistanceTareOffset = 0.0; // 新增：电阻去皮偏差值
 const PIN_WEIGHTS = { 2: 50, 3: 100, 4: 200, 5: 400, 6: 800 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -28,7 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function connectArduino() {
     const btn = document.getElementById('btn-conn-arduino');
-    // 设置中间状态，避免轮询立即重置
     btn.innerText = "正在尝试连接...";
     btn.disabled = true;
 
@@ -37,7 +37,7 @@ function connectArduino() {
         .then(d => {
             if (d.status === 'error') {
                 alert("Arduino连接失败: " + d.msg);
-                resetArduinoBtnUI(); // 显式重置UI
+                resetArduinoBtnUI();
             }
         }).catch(() => {
             alert("请求超时或网络错误");
@@ -77,14 +77,13 @@ function resetBleBtnUI() {
     document.getElementById('btn-tare').disabled = true;
 }
 
-// --- 状态轮询逻辑 (关键修改) ---
+// --- 状态轮询逻辑 ---
 
 function updateStatus() {
     fetch('api/status').then(r => r.json()).then(data => {
         // 1. 处理 Arduino 状态
         const ardBtn = document.getElementById('btn-conn-arduino');
         if (data.arduino.connected) {
-            // 已连接：变绿，但允许点击（以便用户想强制重连）
             if (ardBtn.innerText !== "电阻箱已连接 (点击可重连)") {
                 ardBtn.className = "btn btn-success w-100 py-2 fw-bold";
                 ardBtn.innerText = "电阻箱已连接 (点击可重连)";
@@ -106,8 +105,6 @@ function updateStatus() {
             currentResistance = totalR;
             document.getElementById('res-display').innerText = totalR + " Ω";
         } else {
-            // 未连接：如果按钮当前不是“正在连接...”状态，则重置为初始状态
-            // 这样如果是中途断开，按钮会自动变回蓝色，允许再次点击
             if (ardBtn.innerText !== "正在尝试连接...") {
                 resetArduinoBtnUI();
             }
@@ -128,7 +125,6 @@ function updateStatus() {
             document.getElementById('voltage-display').innerText = formatVoltage(latestVoltage);
 
             document.getElementById('btn-tare').disabled = false;
-            // 只有在未测量时才允许按开始
             if (!data.ble.is_measuring) {
                 document.getElementById('btn-start').disabled = false;
                 document.getElementById('btn-stop').disabled = true;
@@ -142,10 +138,95 @@ function updateStatus() {
             }
             document.getElementById('voltage-display').innerText = "---- V";
         }
+
+        // 3. 实时更新左下角 Delta R 显示屏
+        updateRealtimeDeltaR();
+
     }).catch(err => {
         console.error("轮询失败:", err);
     });
 }
+
+// --- 新增：实时 Delta R 计算与显示 ---
+function updateRealtimeDeltaR() {
+    let Us = parseFloat(document.getElementById('us-input').value);
+    if (isNaN(Us) || Us <= 0) Us = 5.0;
+
+    const Ug = latestVoltage || 0.0;
+    const R0 = currentResistance || 0;
+
+    // 使用精确公式计算原始 Delta R
+    let rawDeltaR = 0;
+    const denom = Us - 2 * Ug;
+    if (Math.abs(denom) > 0.0001) {
+        rawDeltaR = (4 * Ug * R0) / denom;
+    }
+
+    // 减去校准值
+    const displayVal = rawDeltaR - resistanceTareOffset;
+
+    const el = document.getElementById('deltar-display');
+    if (el) {
+        el.innerText = displayVal.toFixed(4) + " Ω";
+    }
+}
+
+// --- 新增：电阻校准逻辑 ---
+function calibrateResistance() {
+    const tbody = document.getElementById('table-body');
+    const rows = tbody.querySelectorAll('tr');
+
+    if (rows.length === 0) {
+        alert("表格中没有数据，无法进行校准。请先记录至少一条数据。");
+        return;
+    }
+
+    const lastRow = rows[rows.length - 1];
+    const headerSelects = document.querySelectorAll('.table-header-select');
+    let deltaR = null;
+
+    // 优先寻找“精确公式”列，其次是“近似公式”
+    let foundIndex = -1;
+
+    // 查找精确公式列
+    for (let i = 0; i < headerSelects.length; i++) {
+        if (headerSelects[i].value === 'calc_strict') {
+            foundIndex = i;
+            break;
+        }
+    }
+
+    // 如果没找到，查找近似公式列
+    if (foundIndex === -1) {
+        for (let i = 0; i < headerSelects.length; i++) {
+            if (headerSelects[i].value === 'calc_linear') {
+                foundIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (foundIndex !== -1) {
+        const cell = lastRow.querySelectorAll('td')[foundIndex];
+        const val = parseFloat(cell.innerText);
+        if (!isNaN(val)) {
+            deltaR = val;
+        }
+    }
+
+    if (deltaR !== null) {
+        resistanceTareOffset = deltaR;
+        document.getElementById('res-tare-val').innerText = `Dev: ${deltaR.toFixed(2)}Ω`;
+        // 视觉反馈
+        const btn = document.getElementById('btn-res-tare');
+        const originalText = btn.innerText;
+        btn.innerText = "已校准!";
+        setTimeout(() => btn.innerText = originalText, 1000);
+    } else {
+        alert("未在最后一行找到有效的 ΔR 数据列（需包含 'ΔR精确' 或 'ΔR近似' 列）。");
+    }
+}
+
 
 // --- 辅助逻辑 (API调用等) ---
 function sendBleCmd(cmd, val = null) {
@@ -259,7 +340,7 @@ function recordManualPoint() {
     const row = document.createElement('tr');
     const headerSelects = document.querySelectorAll('.table-header-select');
     let Us = parseFloat(document.getElementById('us-input').value);
-    if (isNaN(Us) || Us <= 0) Us = 2.0;
+    if (isNaN(Us) || Us <= 0) Us = 5.0;
     const Ug = latestVoltage || 0.0;
     const R0 = currentResistance || 0;
 
@@ -269,10 +350,20 @@ function recordManualPoint() {
         if (type === 'time') td.innerText = ((Date.now() - startTime) / 1000).toFixed(2);
         else if (type === 'voltage') td.innerText = formatVoltage(Ug).replace(' ', '');
         else if (type === 'resistance') td.innerText = R0;
-        else if (type === 'calc_linear') td.innerText = (4 * R0 * Ug / Us).toFixed(4);
+        else if (type === 'calc_linear') {
+            // 原始值
+            let val = (4 * R0 * Ug / Us);
+            // 减去校准值
+            td.innerText = (val - resistanceTareOffset).toFixed(4);
+        }
         else if (type === 'calc_strict') {
             const denom = Us - 2 * Ug;
-            td.innerText = (Math.abs(denom) < 0.0001) ? "Err" : (4 * Ug * R0 / denom).toFixed(4);
+            if (Math.abs(denom) < 0.0001) td.innerText = "Err";
+            else {
+                let val = (4 * Ug * R0 / denom);
+                // 减去校准值
+                td.innerText = (val - resistanceTareOffset).toFixed(4);
+            }
         } else td.innerText = "";
         row.appendChild(td);
     });

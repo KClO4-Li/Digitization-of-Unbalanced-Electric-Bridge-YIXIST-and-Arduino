@@ -33,6 +33,12 @@ body {
     font-size: 2.5rem;
 }
 
+
+.display-deltar {
+    color: #FFD700;
+    font-size: 2.5rem;
+}
+
 .status-bar {
     font-size: 0.9rem;
     color: #666;

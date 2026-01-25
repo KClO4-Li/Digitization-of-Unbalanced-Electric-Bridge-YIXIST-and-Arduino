@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="static/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* 局部样式补充，确保表头紧凑 */
         .th-container {
             display: flex;
             flex-direction: column;
@@ -47,7 +46,7 @@
             <div class="col-md-4 d-flex flex-column">
                 <div class="card h-100 w-100">
                     <div class="card-header bg-primary text-white fw-bold">电阻箱控制</div>
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <div id="arduino-status" class="alert alert-secondary py-1 text-center small">等待连接...</div>
 
                         <div class="display-box display-resistor" id="res-display">---- Ω</div>
@@ -62,7 +61,7 @@
                         </div>
 
                         <h6 class="text-muted border-bottom pb-2 small">引脚详情</h6>
-                        <div style="max-height: 400px; overflow-y: auto;">
+                        <div class="flex-grow-1 mb-3 border rounded p-2" style="overflow-y: auto; min-height: 150px;">
                             {% set pin_map = [(2, 50), (3, 100), (4, 200), (5, 400), (6, 800)] %}
                             {% for pin, ohm in pin_map %}
                             <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
@@ -74,6 +73,11 @@
                                 </div>
                             </div>
                             {% endfor %}
+                        </div>
+
+                        <div class="mt-auto">
+                            <h6 class="text-muted small">实时 ΔR (已去皮):</h6>
+                            <div class="display-box display-deltar" id="deltar-display">0.0000 Ω</div>
                         </div>
                     </div>
                 </div>
@@ -99,7 +103,7 @@
                         <div class="d-flex gap-2 justify-content-center">
                             <button id="btn-start" class="btn btn-success px-4" disabled>▶ 开始测量</button>
                             <button id="btn-stop" class="btn btn-danger px-4" disabled>⏹ 停止</button>
-                            <button id="btn-tare" class="btn btn-warning px-4" disabled>⚖ 归零</button>
+                            <button id="btn-tare" class="btn btn-warning px-4" disabled>⚖ 电压归零</button>
                         </div>
                         <div class="status-bar text-center">状态: <span id="ble-status">未连接</span></div>
                     </div>
@@ -121,10 +125,17 @@
                             <div class="col-auto">
                                 <div class="input-group input-group-sm" title="用于ΔR计算的电源电压">
                                     <span class="input-group-text">Us(V)</span>
-                                    <input type="number" id="us-input" class="form-control" value="2.0" step="0.1"
+                                    <input type="number" id="us-input" class="form-control" value="5.0" step="0.1"
                                         style="width: 60px;">
                                 </div>
                             </div>
+
+                            <div class="col-auto border-start ps-2">
+                                <button id="btn-res-tare" class="btn btn-sm btn-warning fw-bold"
+                                    onclick="calibrateResistance()">⚖ 电阻校准(归零)</button>
+                                <span class="small text-muted ms-1" id="res-tare-val">Dev: 0Ω</span>
+                            </div>
+
                             <div class="col-auto border-start ps-2">
                                 <div class="input-group input-group-sm">
                                     <span class="input-group-text">间隔(s)</span>
