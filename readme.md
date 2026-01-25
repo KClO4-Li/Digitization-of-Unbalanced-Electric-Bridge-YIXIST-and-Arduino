@@ -8,6 +8,6 @@
 
 ble_worker含有YIXIST电压传感器的基本操作, 基本上厂家不会给你, 网上也比较难找, 这是我用dnSpy解析软件弄出来的源码中提取的, 可以通过python的bleak控制.
 
-arduino_manager是一个粗糙的二进制电阻箱的实现, 用了三个8路继电器和步进50的二进制电阻. 使用的是StandardFirmata.
+arduino_manager是一个粗糙的二进制电阻箱的实现, 用了三个8路继电器和步进50的二进制电阻. 使用的是StandardFirmata, 记得提前烧录.
 
-要用的话记得改一下开头的默认的配置参数.
+要用的话记得改一下开头的默认的配置参数, 包括YIXIST的蓝牙MAC和uuid(不知道的话用dnSpy的项目解析一下再把核心的.cs扔给ai分析一下就出来了), Arduino的端口.
