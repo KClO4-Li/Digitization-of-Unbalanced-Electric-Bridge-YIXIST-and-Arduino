@@ -215,7 +215,7 @@ function calibrateResistance() {
     }
 
     if (deltaR !== null) {
-        resistanceTareOffset = deltaR;
+        resistanceTareOffset += deltaR;
         document.getElementById('res-tare-val').innerText = `Dev: ${deltaR.toFixed(2)}Ω`;
         // 视觉反馈
         const btn = document.getElementById('btn-res-tare');
@@ -392,6 +392,8 @@ function clearTable() {
     if (confirm("确定清空数据？")) {
         document.getElementById('table-body').innerHTML = "";
         startTime = Date.now();
+        resistanceTareOffset = 0.0; // 清空表格时，物理偏差也重新开始计算
+        document.getElementById('res-tare-val').innerText = `Dev: 0.00Ω`;
         if (chartInstance) chartInstance.destroy();
     }
 }
