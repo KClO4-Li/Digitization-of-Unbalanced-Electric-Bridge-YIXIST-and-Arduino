@@ -216,7 +216,7 @@ function calibrateResistance() {
 
     if (deltaR !== null) {
         resistanceTareOffset += deltaR;
-        document.getElementById('res-tare-val').innerText = `Dev: ${deltaR.toFixed(2)}Ω`;
+        document.getElementById('res-tare-val').innerText = `Dev: ${resistanceTareOffset.toFixed(2)}Ω`;
         // 视觉反馈
         const btn = document.getElementById('btn-res-tare');
         const originalText = btn.innerText;
